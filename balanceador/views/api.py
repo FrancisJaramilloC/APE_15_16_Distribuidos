@@ -54,6 +54,10 @@ def get_stats():
 def get_db_nodos():
     return jsonify(current_app.db.get_all_nodes())
 
+@api_bp.route('/api/db/circuit')
+def get_db_circuit_logs():
+    return jsonify(current_app.db.get_circuit_logs())
+
 @api_bp.route('/api/metrics')
 def get_metrics():
     return jsonify(current_app.history.get_chart_data())

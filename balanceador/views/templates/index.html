@@ -152,6 +152,30 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;bac
       </table>
     </div>
   </section>
+  <section class="glass-card p-4 mb-5">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-xs font-semibold text-slate-300 flex items-center gap-2">
+        <i class="fa-solid fa-bolt-lightning text-warn/80 text-xs"></i> Auditoría Circuit Breaker (<code class="text-accent2">nodos.db</code> &mdash; tabla <code class="text-accent">circuit_log</code>)
+      </h3>
+      <span class="text-[10px] font-mono text-slate-500">Transiciones de Estado (CLOSED / OPEN / HALF_OPEN)</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs font-mono">
+        <thead>
+          <tr class="border-b border-white/10 text-slate-400">
+            <th class="py-2 px-3">ID</th>
+            <th class="py-2 px-3">Servicio</th>
+            <th class="py-2 px-3">Transición de Estado</th>
+            <th class="py-2 px-3">Motivo / Descripción</th>
+            <th class="py-2 px-3">Timestamp</th>
+          </tr>
+        </thead>
+        <tbody id="circuitLogTableBody">
+          <tr><td colspan="5" class="py-4 text-center text-slate-600">Cargando registros de Circuit Breaker...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
   <section class="glass-card p-5">
     <h2 class="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2"><i class="fa-solid fa-sliders text-accent/60 text-xs"></i> Configuración Ollama</h2>
     <div class="flex flex-wrap gap-3 items-end">
@@ -429,14 +453,44 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;bac
     tbody.innerHTML = html;
   }
 
+  function circuitStateBadge(st) {
+    if (st === 'CLOSED') return '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-accent/20 text-accent">CLOSED</span>';
+    if (st === 'OPEN') return '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-danger/20 text-danger">OPEN</span>';
+    if (st === 'HALF_OPEN') return '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-warn/20 text-warn">HALF_OPEN</span>';
+    return '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-white/10 text-slate-400">' + escapeHtml(st) + '</span>';
+  }
+
+  function renderCircuitLogs(logs) {
+    var tbody = document.getElementById('circuitLogTableBody');
+    if (!tbody) return;
+    if (!logs || !logs.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-slate-600">Sin transiciones registradas en circuit_log</td></tr>';
+      return;
+    }
+    var html = '';
+    logs.forEach(function(l) {
+      var badgeOld = circuitStateBadge(l.estado_anterior);
+      var badgeNew = circuitStateBadge(l.nuevo_estado);
+      html += '<tr class="border-b border-white/[0.04] text-slate-300">'
+        + '<td class="py-2 px-3 text-slate-500">' + l.id + '</td>'
+        + '<td class="py-2 px-3 font-semibold text-slate-200">' + escapeHtml(l.servicio) + '</td>'
+        + '<td class="py-2 px-3">' + badgeOld + ' &rarr; ' + badgeNew + '</td>'
+        + '<td class="py-2 px-3 text-slate-400">' + escapeHtml(l.motivo || '') + '</td>'
+        + '<td class="py-2 px-3 text-slate-500 text-[11px]">' + escapeHtml(l.timestamp) + '</td>'
+        + '</tr>';
+    });
+    tbody.innerHTML = html;
+  }
+
   async function fetchAll() {
     try {
-      var [sR, stR, mR, dR, dbR] = await Promise.all([
+      var [sR, stR, mR, dR, dbR, clR] = await Promise.all([
         fetch('/api/servers').then(function(r) { return r.json(); }),
         fetch('/api/stats').then(function(r) { return r.json(); }),
         fetch('/api/metrics').then(function(r) { return r.json(); }),
         fetch('/api/decisions').then(function(r) { return r.json(); }),
-        fetch('/api/db/nodos').then(function(r) { return r.json(); }).catch(function() { return []; })
+        fetch('/api/db/nodos').then(function(r) { return r.json(); }).catch(function() { return []; }),
+        fetch('/api/db/circuit').then(function(r) { return r.json(); }).catch(function() { return []; })
       ]);
       serversData = sR;
       renderServers(sR);
@@ -444,6 +498,7 @@ body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;bac
       updateCharts(mR, stR);
       renderDecisions(dR);
       renderDbNodes(dbR);
+      renderCircuitLogs(clR);
     } catch(e) {
       console.error('Error fetchAll:', e);
     }
