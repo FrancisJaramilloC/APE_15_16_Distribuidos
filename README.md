@@ -9,24 +9,24 @@ Este repositorio contiene la solución integral para las prácticas **APE Nro. 1
 
 ```mermaid
 graph TD
-    Client["📱 Cliente HTTP / cURL / Navegador"] -->|GET /pago| Orch["⚡ Microservicio Orquestador (Spring Boot :8080 / :5001)"]
-    Orch -->|Protegido por| CB["🛡️ Circuit Breaker (CLOSED / OPEN / HALF-OPEN)"]
+    Client["📱 Cliente HTTP / cURL / Navegador"] -->|"GET /pago"| Orch["⚡ Microservicio Orquestador (Spring Boot :8080 / :5001)"]
+    Orch -->|"Protegido por"| CB["🛡️ Circuit Breaker (CLOSED / OPEN / HALF-OPEN)"]
     
-    CB -->|Si CLOSED / HALF-OPEN| LB["⚖️ Microservicio Balanceador (Spring Boot :8000 / :5000)"]
-    CB -->|Si OPEN (< 0.01s)| FB["⚠️ Respuesta Fallback Inmediata"]
+    CB -->|"Si CLOSED / HALF-OPEN"| LB["⚖️ Microservicio Balanceador (Spring Boot :8000 / :5000)"]
+    CB -->|"Si OPEN (menor a 0.01s)"| FB["⚠️ Respuesta Fallback Inmediata"]
     
-    LB -->|Round-Robin / Least-Connections| Cluster["Cluster de 4 Microservicios Backend (Spring Boot)"]
+    LB -->|"Round-Robin / Least-Connections"| Cluster["Cluster de 4 Microservicios Backend (Spring Boot)"]
     Cluster --> B1["💳 Microservicio Pagos (:9001 - Integrante 1)"]
     Cluster --> B2["📦 Microservicio Inventario (:9002 - Integrante 2)"]
     Cluster --> B3["👤 Microservicio Usuarios (:9003 - Integrante 3)"]
     Cluster --> B4["🔔 Microservicio Notificaciones (:9004 - Integrante 4)"]
     
-    HB["❤️ Heartbeat Scheduler (Cada 2s)"] -->|GET /health| B1
-    HB -->|GET /health| B2
-    HB -->|GET /health| B3
-    HB -->|GET /health| B4
-    HB -->|Actualiza estado_nodos| DB[("🗄️ SQLite nodos.db")]
-    CB -->|Registra circuit_log| DB
+    HB["❤️ Heartbeat Scheduler (Cada 2s)"] -->|"GET /health"| B1
+    HB -->|"GET /health"| B2
+    HB -->|"GET /health"| B3
+    HB -->|"GET /health"| B4
+    HB -->|"Actualiza estado_nodos"| DB[("🗄️ SQLite nodos.db")]
+    CB -->|"Registra circuit_log"| DB
 ```
 
 ---
