@@ -20,11 +20,14 @@ def create_app():
     app.history = history
     app.db = db
 
-    # Pre-registrar nodos backend por defecto (9001 y 9002) según Guía 15 y 16
-    s1, _ = balancer.add_server("127.0.0.1:9001", 1.0)
-    s2, _ = balancer.add_server("127.0.0.1:9002", 1.0)
-    if s1: history.register_server(s1)
-    if s2: history.register_server(s2)
+    # Pre-registrar nodos backend del cluster (vía variable de entorno BACKEND_NODES o por defecto local)
+    import os
+    env_nodes = os.getenv('BACKEND_NODES', '127.0.0.1:9001,127.0.0.1:9002').split(',')
+    for addr in env_nodes:
+        addr = addr.strip()
+        if addr:
+            srv, _ = balancer.add_server(addr, 1.0)
+            if srv: history.register_server(srv)
 
     # Registrar Blueprints (Vistas)
     app.register_blueprint(dashboard_bp)
