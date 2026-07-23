@@ -17,7 +17,7 @@ public class LoadBalancerService {
     public LoadBalancerService() {
         // Nodos backend por defecto (1 por integrante de backend: Pagos, Inventario, Usuarios)
         nodes.add(new BackendNode("192.168.1.30", 9001)); // Microservicio Pagos (Integrante 3)
-        nodes.add(new BackendNode("192.168.1.31", 9002)); // Microservicio Inventario (Integrante 4)
+        nodes.add(new BackendNode("192.168.1.31", 9005)); // Microservicio Inventario (Integrante 4)
         nodes.add(new BackendNode("192.168.1.32", 9003)); // Microservicio Usuarios (Integrante 5)
     }
 

@@ -8,7 +8,7 @@ public class InventarioApplication {
     public static void main(String[] args) {
         SpringApplication app = new SpringApplication(InventarioApplication.class);
         System.setProperty("server.address", "0.0.0.0");
-        System.setProperty("server.port", System.getProperty("port", "9002"));
+        System.setProperty("server.port", System.getProperty("port", "9005"));
         app.run(args);
     }
 }

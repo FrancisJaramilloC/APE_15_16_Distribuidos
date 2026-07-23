@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import com.distribuidos.balanceador.model.BackendNode;
 
 @Component
 public class DatabaseManager {
@@ -50,6 +51,9 @@ public class DatabaseManager {
                     ultima_actualizacion TEXT NOT NULL
                 );
             """);
+
+            // Limpiar registros antiguos de pruebas previas al arrancar
+            stmt.execute("DELETE FROM estado_nodos;");
 
             stmt.execute("""
                 CREATE TABLE IF NOT EXISTS circuit_log (
