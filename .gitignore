@@ -8,6 +8,8 @@ target/
 # Base de datos SQLite local generada en runtime
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
 *.sqlite3
 nodos.db
 
