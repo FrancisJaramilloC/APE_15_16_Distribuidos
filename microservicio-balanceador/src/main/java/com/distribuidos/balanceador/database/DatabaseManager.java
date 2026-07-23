@@ -67,6 +67,21 @@ public class DatabaseManager {
         }
     }
 
+    public synchronized void syncNodes(List<BackendNode> activeNodes) {
+        if (activeNodes == null || activeNodes.isEmpty()) return;
+        try (Connection conn = DriverManager.getConnection(URL);
+             Statement stmt = conn.createStatement()) {
+            StringBuilder inClause = new StringBuilder();
+            for (int i = 0; i < activeNodes.size(); i++) {
+                if (i > 0) inClause.append(",");
+                inClause.append("'").append(activeNodes.get(i).getAddress()).append("'");
+            }
+            stmt.executeUpdate("DELETE FROM estado_nodos WHERE nodo NOT IN (" + inClause.toString() + ");");
+        } catch (Exception e) {
+            System.err.println("[SQLite Sync Nodes Error] " + e.getMessage());
+        }
+    }
+
     public synchronized void updateNodeStatus(String nodo, int puerto, String estado, double latencia) {
         String nowStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
         String sql = """

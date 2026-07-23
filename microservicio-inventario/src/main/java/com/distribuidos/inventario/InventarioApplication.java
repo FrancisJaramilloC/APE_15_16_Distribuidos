@@ -7,7 +7,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class InventarioApplication {
     public static void main(String[] args) {
         SpringApplication app = new SpringApplication(InventarioApplication.class);
-        // Puerto por defecto 9002
+        System.setProperty("server.address", "0.0.0.0");
         System.setProperty("server.port", System.getProperty("port", "9002"));
         app.run(args);
     }

@@ -7,7 +7,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class PagosApplication {
     public static void main(String[] args) {
         SpringApplication app = new SpringApplication(PagosApplication.class);
-        // Puerto por defecto 9001
+        System.setProperty("server.address", "0.0.0.0");
         System.setProperty("server.port", System.getProperty("port", "9001"));
         app.run(args);
     }

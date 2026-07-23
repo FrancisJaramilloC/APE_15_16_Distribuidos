@@ -24,6 +24,7 @@ public class HeartbeatScheduler {
     @Scheduled(fixedRate = 2000) // Sondeo cada 2 segundos para detección < 3s (Guía 15/16)
     public void performHeartbeat() {
         List<BackendNode> nodes = loadBalancerService.getAllNodes();
+        databaseManager.syncNodes(nodes);
 
         for (BackendNode node : nodes) {
             long start = System.currentTimeMillis();
