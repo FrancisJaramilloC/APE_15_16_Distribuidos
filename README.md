@@ -14,21 +14,20 @@ flowchart TD
         Req["Petición HTTP GET /pago"]
     end
 
-    subgraph CapaOrquestacion ["⚡ Microservicio Orquestador (Spring Boot :8080 / :5001)"]
+    subgraph CapaOrquestacion ["⚡ Microservicio Orquestador (Spring Boot :8080)"]
         CB["🛡️ Circuit Breaker<br/>(CLOSED / OPEN / HALF-OPEN)"]
         FB["⚠️ Respuesta Fallback<br/>(Respuesta Inmediata)"]
     end
 
-    subgraph CapaBalanceo ["⚖️ Microservicio Balanceador (Spring Boot :8000 / :5000)"]
+    subgraph CapaBalanceo ["⚖️ Microservicio Balanceador (Spring Boot :8000)"]
         LB["Proxy Balanceador de Carga"]
         HB["❤️ Heartbeat Scheduler<br/>(Sondeo /health cada 2s)"]
     end
 
     subgraph CapaCluster ["📦 Cluster de Microservicios Backend (Spring Boot)"]
-        B1["💳 Pagos (:9001)<br/>(Integrante 1)"]
-        B2["📦 Inventario (:9002)<br/>(Integrante 2)"]
-        B3["👤 Usuarios (:9003)<br/>(Integrante 3)"]
-        B4["🔔 Notificaciones (:9004)<br/>(Integrante 4)"]
+        B1["💳 Pagos (:9001)<br/>(Integrante 3)"]
+        B2["📦 Inventario (:9002)<br/>(Integrante 4)"]
+        B3["👤 Usuarios (:9003)<br/>(Integrante 5)"]
     end
 
     subgraph CapaPersistencia ["🗄️ Persistencia SQLite (nodos.db)"]
@@ -45,7 +44,6 @@ flowchart TD
     LB -->|"Round-Robin"| B1
     LB -->|"Round-Robin"| B2
     LB -->|"Round-Robin"| B3
-    LB -->|"Round-Robin"| B4
 
     %% Monitoreo en Segundo Plano y Persistencia
     HB -.->|"Sondeo /health"| CapaCluster
@@ -55,54 +53,37 @@ flowchart TD
 
 ---
 
-## 🧩 Microservicios del Proyecto (1 por Integrante + Dashboard Web)
+## 🧩 Asignación de los 5 Microservicios Spring Boot (1 por Integrante)
 
-1. **`frontend/` (Dashboard Web en Flask - Puerto 5000)**:
-   - Interfaz gráfica interactiva y limpia para demostración en vivo.
-   - Permite enviar peticiones al Orquestador (`GET /pago`) o lanzar ráfagas de 10 peticiones.
-   - Muestra en tiempo real la tabla `estado_nodos` (Heartbeat) y la tabla `circuit_log` (Circuit Breaker).
+| Integrante | Rol / Responsabilidad | Microservicio Spring Boot | Puerto | Endpoints |
+| --- | --- | --- | --- | --- |
+| **Integrante 1** | **Orquestación & Tolerancia a Fallos** | `microservicio-orquestador` | **`8080`** | `GET /pago`, `/api/circuit/*` |
+| **Integrante 2** | **Balanceo de Carga & Health Check** | `microservicio-balanceador` | **`8000`** | `GET /balance/*`, `/api/db/*` |
+| **Integrante 3** | **Microservicio Backend 1 (Pagos)** | `microservicio-pagos` | **`9001`** | `GET /health`, `/api/pagos/procesar` |
+| **Integrante 4** | **Microservicio Backend 2 (Inventario)** | `microservicio-inventario` | **`9002`** | `GET /health`, `/api/inventario/consultar` |
+| **Integrante 5** | **Microservicio Backend 3 (Usuarios)** | `microservicio-usuarios` | **`9003`** | `GET /health`, `/api/usuarios/verificar` |
 
-2. **`microservicio-orquestador` (Spring Boot - Puerto 8080 / 5001)**:
-   - API Gateway principal.
-   - Implementa el patrón **Circuit Breaker** (clase `CircuitBreaker.java`) con estados `CLOSED`, `OPEN`, `HALF_OPEN`.
-   - Persiste cada cambio de estado del circuito en la tabla `circuit_log` de SQLite (`nodos.db`).
-
-3. **`microservicio-balanceador` (Spring Boot - Puerto 8000 / 5000)**:
-   - Microservicio Proxy que distribuye el tráfico entre los microservicios backend del cluster.
-   - Contiene el `HeartbeatScheduler` que sondea `/health` en los nodos cada 2s (timeout 1.5s).
-   - Persiste el estado físico de los nodos (`ACTIVO` / `INACTIVO`) en la tabla `estado_nodos` de SQLite (`nodos.db`).
-
-4. **`microservicio-pagos` (Spring Boot - Puerto 9001 - Integrante 1)**:
-   - Microservicio Backend de Procesamiento de Pagos (`/health`, `/api/pagos/procesar`).
-
-5. **`microservicio-inventario` (Spring Boot - Puerto 9002 - Integrante 2)**:
-   - Microservicio Backend de Gestión de Inventario (`/health`, `/api/inventario/consultar`).
-
-6. **`microservicio-usuarios` (Spring Boot - Puerto 9003 - Integrante 3)**:
-   - Microservicio Backend de Autenticación y Usuarios (`/health`, `/api/usuarios/verificar`).
-
-7. **`microservicio-notificaciones` (Spring Boot - Puerto 9004 - Integrante 4)**:
-   - Microservicio Backend de Envíos y Notificaciones (`/health`, `/api/notificaciones/enviar`).
+> 📌 **`frontend/` (Dashboard Web en Flask - Puerto 5000)**:  
+> Herramienta visual interactiva para demostración en vivo. Permite probar el envío de ráfagas, ver las tablas SQLite (`estado_nodos` y `circuit_log`) y verificar las respuestas HTTP en tiempo real.
 
 ---
 
 ## 🌐 Despliegue en un Cluster Multimáquina (Red LAN / Switch Ethernet)
 
-Para realizar la presentación en el laboratorio utilizando múltiples computadores físicos o máquinas virtuales conectados a un Switch Ethernet:
+Para realizar la presentación en el laboratorio utilizando 5 computadores físicos o VMs conectados a un Switch Ethernet:
 
-1. **En las PCs de los Integrantes 1, 2, 3 y 4 (Nodos Backend)**:
-   - Integrante 1 (PC 1 - `192.168.1.30`): `cd microservicio-pagos && mvn spring-boot:run`
-   - Integrante 2 (PC 2 - `192.168.1.31`): `cd microservicio-inventario && mvn spring-boot:run`
-   - Integrante 3 (PC 3 - `192.168.1.32`): `cd microservicio-usuarios && mvn spring-boot:run`
-   - Integrante 4 (PC 4 - `192.168.1.33`): `cd microservicio-notificaciones && mvn spring-boot:run`
+1. **En las PCs de los Integrantes 3, 4 y 5 (Nodos Backend)**:
+   - Integrante 3 (PC 3 - `192.168.1.30`): `cd microservicio-pagos && mvn spring-boot:run`
+   - Integrante 4 (PC 4 - `192.168.1.31`): `cd microservicio-inventario && mvn spring-boot:run`
+   - Integrante 5 (PC 5 - `192.168.1.32`): `cd microservicio-usuarios && mvn spring-boot:run`
 
-2. **En la PC del Balanceador de Carga (PC 5 - `192.168.1.20`)**:
+2. **En la PC del Integrante 2 (Balanceador de Carga - `192.168.1.20`)**:
    - Inicia el microservicio balanceador:
      ```bash
      cd microservicio-balanceador && mvn spring-boot:run
      ```
 
-3. **En la PC del Orquestador (PC 6 - `192.168.1.10`)**:
+3. **En la PC del Integrante 1 (Orquestador - `192.168.1.10`)**:
    - Inicia el microservicio orquestador vinculando la IP del balanceador:
      ```bash
      BALANCER_URL="http://192.168.1.20:8000" cd microservicio-orquestador && mvn spring-boot:run
@@ -149,7 +130,7 @@ CREATE TABLE IF NOT EXISTS circuit_log (
 
 | Escenario | Estado de Backends | Estado BD: `estado_nodos` | Estado del Circuito (Esperado) | Tiempo de respuesta Orquestador | Registro BD: `circuit_log` |
 | --- | --- | --- | --- | --- | --- |
-| **Backends activos** | 9001-9004: ACTIVO | 9001: ACTIVO, 9002: ACTIVO... | **`CLOSED`** | ~0.05s | `CLOSED` |
+| **Backends activos** | 9001-9003: ACTIVO | 9001: ACTIVO, 9002: ACTIVO, 9003: ACTIVO | **`CLOSED`** | ~0.05s | `CLOSED` |
 | **Caen ambos/todos Backends** | Todos inactivos | 9001: INACTIVO, 9002: INACTIVO... | **`CLOSED` -> Acumula 3 fallos** | ~1s | - |
 | **Backends siguen caídos** | Todos inactivos | 9001: INACTIVO, 9002: INACTIVO... | **`OPEN`** | **< 0.01s** (Fallback) | `OPEN` |
 | **Pasan 10s (Prueba Half-Open)** | Todos inactivos | 9001: INACTIVO, 9002: INACTIVO... | **`HALF_OPEN` -> `OPEN`** | ~1s | `HALF_OPEN`, `OPEN` |

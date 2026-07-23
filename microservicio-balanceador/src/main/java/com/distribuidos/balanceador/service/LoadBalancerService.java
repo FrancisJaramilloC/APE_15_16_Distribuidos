@@ -15,11 +15,10 @@ public class LoadBalancerService {
     private final AtomicInteger currentIndex = new AtomicInteger(0);
 
     public LoadBalancerService() {
-        // Nodos por defecto para los 4 microservicios backend según Guía 16
-        nodes.add(new BackendNode("127.0.0.1", 9001)); // Pagos
-        nodes.add(new BackendNode("127.0.0.1", 9002)); // Inventario
-        nodes.add(new BackendNode("127.0.0.1", 9003)); // Usuarios
-        nodes.add(new BackendNode("127.0.0.1", 9004)); // Notificaciones
+        // Nodos backend por defecto (1 por integrante de backend: Pagos, Inventario, Usuarios)
+        nodes.add(new BackendNode("127.0.0.1", 9001)); // Microservicio Pagos (Integrante 3)
+        nodes.add(new BackendNode("127.0.0.1", 9002)); // Microservicio Inventario (Integrante 4)
+        nodes.add(new BackendNode("127.0.0.1", 9003)); // Microservicio Usuarios (Integrante 5)
     }
 
     public List<BackendNode> getAllNodes() {
