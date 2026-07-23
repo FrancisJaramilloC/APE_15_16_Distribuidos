@@ -176,7 +176,13 @@ Cuando conecten las 5 laptops al **Switch Ethernet del laboratorio**:
 
 ## 🗄️ Modelo de Datos SQLite (`nodos.db`) con Datos Reales de Ejemplo
 
-La base de datos `nodos.db` se gestiona en SQLite y almacena el estado físico de los nodos y el historial del Circuit Breaker:
+> **¿Quién crea la base de datos y cómo se insertan los datos?**  
+> **NO TIENES QUE INGRESAR NADA A MANO.**  
+> 1. **Creación Automática del Archivo y Tablas**: La base de datos `nodos.db` y sus 2 tablas (`estado_nodos` y `circuit_log`) **se crean automáticamente** en la raíz del proyecto en cuanto ejecutas los microservicios Spring Boot (`microservicio-balanceador` y `microservicio-orquestador`) mediante sentencias SQL DDL (`CREATE TABLE IF NOT EXISTS`).  
+> 2. **Llenado Automático de `estado_nodos`**: El hilo de fondo `HeartbeatScheduler` sondea cada 2 segundos a los backends e inserta/actualiza **automáticamente** la latencia, estado (`ACTIVO`/`INACTIVO`) y hora exacta.  
+> 3. **Llenado Automático de `circuit_log`**: Cada vez que ocurre una falla o cambio de estado (`CLOSED` &rarr; `OPEN` &rarr; `HALF_OPEN`), la clase `CircuitBreaker` guarda **automáticamente** el evento y el motivo en SQLite.  
+> 
+> *Las siguientes tablas son un ejemplo ilustrativo del contenido que la aplicación genera de forma autónoma durante la ejecución:*
 
 ### 1. Tabla `estado_nodos` (Heartbeat Físico - Guía 15)
 Registra la salud física sondeada en tiempo real cada 2 segundos.
