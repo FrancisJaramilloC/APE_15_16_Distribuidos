@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Demostración de Microservicios Distribuidos — APE 15 & 16</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { display: ['Space Grotesk', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] },
+          colors: {
+            bg: '#080c14',
+            card: 'rgba(13, 20, 36, 0.85)',
+            accent: '#00ff88',
+            accent2: '#00d4ff',
+            warn: '#fbbf24',
+            danger: '#ef4444'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Space Grotesk', sans-serif; background: #080c14; color: #e2e8f0; min-height: 100vh; }
+    .glass-card { background: rgba(13, 20, 36, 0.85); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; backdrop-filter: blur(12px); }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .dot-closed { background: #00ff88; box-shadow: 0 0 10px rgba(0,255,136,0.6); animation: pulse-green 2s infinite; }
+    .dot-open { background: #ef4444; box-shadow: 0 0 10px rgba(239,68,68,0.6); animation: pulse-red 1s infinite; }
+    .dot-half { background: #fbbf24; box-shadow: 0 0 10px rgba(251,191,36,0.6); animation: pulse-yellow 1.5s infinite; }
+    @keyframes pulse-green { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    @keyframes pulse-red { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    @keyframes pulse-yellow { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .badge-closed { background: rgba(0,255,136,0.15); color: #00ff88; border: 1px solid rgba(0,255,136,0.3); }
+    .badge-open { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+    .badge-half { background: rgba(251,191,36,0.15); color: #fbbf24; border: 1px solid rgba(251,191,36,0.3); }
+    .btn-action { transition: all 0.2s; cursor: pointer; }
+    .btn-action:active { transform: scale(0.97); }
+  </style>
+</head>
+<body class="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
+
+  <!-- Header -->
+  <header class="glass-card p-5 flex flex-wrap items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <div class="w-11 h-11 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent text-xl">
+        <i class="fa-solid fa-cubes-stacked"></i>
+      </div>
+      <div>
+        <h1 class="text-xl font-bold tracking-tight font-display">Demostración de Microservicios Distribuidos</h1>
+        <p class="text-xs text-slate-400 font-mono">Heartbeat Failover &bull; Circuit Breaker &bull; SQLite nodos.db</p>
+      </div>
+    </div>
+
+    <!-- Indicador Estado Circuit Breaker -->
+    <div class="flex items-center gap-3">
+      <div class="glass-card px-4 py-2 flex items-center gap-3">
+        <span class="status-dot dot-closed" id="cbDot"></span>
+        <div>
+          <div class="text-[10px] text-slate-400 font-mono uppercase">Circuit Breaker</div>
+          <div class="text-sm font-bold font-mono text-accent" id="cbStateLabel">CLOSED</div>
+        </div>
+      </div>
+      <div class="text-xs font-mono text-slate-400" id="clockDisplay">--:--:--</div>
+    </div>
+  </header>
+
+  <!-- Panel de Pruebas de Tráfico -->
+  <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="glass-card p-5 lg:col-span-1 space-y-4">
+      <h2 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+        <i class="fa-solid fa-paper-plane text-accent"></i> Simular Peticiones de Usuario
+      </h2>
+      <p class="text-xs text-slate-400 leading-relaxed">
+        Envía peticiones HTTP al <strong>Microservicio Orquestador</strong>. Las llamadas pasarán por el <strong>Circuit Breaker</strong> y el <strong>Balanceador</strong> hacia los backends.
+      </p>
+
+      <div class="space-y-2 pt-2">
+        <button onclick="sendSingleRequest()" class="btn-action w-full py-2.5 px-4 rounded-lg bg-accent/15 border border-accent/30 text-accent font-semibold text-xs flex items-center justify-center gap-2 hover:bg-accent/25">
+          <i class="fa-solid fa-bolt"></i> Enviar 1 Petición (GET /pago)
+        </button>
+
+        <button onclick="sendBurstRequests(10)" class="btn-action w-full py-2.5 px-4 rounded-lg bg-accent2/15 border border-accent2/30 text-accent2 font-semibold text-xs flex items-center justify-center gap-2 hover:bg-accent2/25">
+          <i class="fa-solid fa-rocket"></i> Enviar Ráfaga de 10 Peticiones
+        </button>
+      </div>
+
+      <div class="p-3 rounded-lg bg-black/40 border border-white/5 space-y-1 text-[11px] font-mono text-slate-400">
+        <div><span class="text-slate-500">Orquestador:</span> <span id="lblOrchUrl">http://127.0.0.1:8080</span></div>
+        <div><span class="text-slate-500">Balanceador:</span> <span id="lblBalUrl">http://127.0.0.1:8000</span></div>
+      </div>
+    </div>
+
+    <!-- Visor de Respuesta en Tiempo Real -->
+    <div class="glass-card p-5 lg:col-span-2 flex flex-col">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+          <i class="fa-solid fa-code text-accent2"></i> Última Respuesta Recibida
+        </h2>
+        <div id="respBadge" class="text-xs font-mono px-2.5 py-1 rounded bg-white/5 text-slate-400">Esperando petición...</div>
+      </div>
+
+      <div class="flex-1 bg-black/50 rounded-lg p-4 font-mono text-xs overflow-x-auto border border-white/5 min-h-[160px]" id="jsonOutput">
+        <span class="text-slate-500">// Haz clic en "Enviar 1 Petición" para probar el flujo de microservicios</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tabla 1: Heartbeat Nodos BD (estado_nodos) -->
+  <section class="glass-card p-5 space-y-3">
+    <div class="flex items-center justify-between">
+      <h2 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+        <i class="fa-solid fa-server text-accent"></i> Monitoreo Heartbeat de Nodos Backend (SQLite &mdash; <code class="text-accent2">estado_nodos</code>)
+      </h2>
+      <span class="text-[10px] font-mono text-slate-400">Sondeo cada 2s &bull; Failover en &lt; 3s</span>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs font-mono">
+        <thead>
+          <tr class="border-b border-white/10 text-slate-400 uppercase text-[10px] tracking-wider">
+            <th class="py-2.5 px-3">ID</th>
+            <th class="py-2.5 px-3">Nodo / Dirección</th>
+            <th class="py-2.5 px-3">Puerto</th>
+            <th class="py-2.5 px-3">Estado Físico BD</th>
+            <th class="py-2.5 px-3">Latencia</th>
+            <th class="py-2.5 px-3">Última Actualización</th>
+          </tr>
+        </thead>
+        <tbody id="tblNodosBody">
+          <tr><td colspan="6" class="py-4 text-center text-slate-500">Cargando estado de nodos...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Tabla 2: Auditoría Circuit Breaker (circuit_log) -->
+  <section class="glass-card p-5 space-y-3">
+    <div class="flex items-center justify-between">
+      <h2 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+        <i class="fa-solid fa-bolt-lightning text-warn"></i> Auditoría Transiciones Circuit Breaker (SQLite &mdash; <code class="text-accent2">circuit_log</code>)
+      </h2>
+      <span class="text-[10px] font-mono text-slate-400">CLOSED &rarr; OPEN &rarr; HALF_OPEN</span>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs font-mono">
+        <thead>
+          <tr class="border-b border-white/10 text-slate-400 uppercase text-[10px] tracking-wider">
+            <th class="py-2.5 px-3">ID</th>
+            <th class="py-2.5 px-3">Servicio</th>
+            <th class="py-2.5 px-3">Cambio de Estado</th>
+            <th class="py-2.5 px-3">Motivo / Causa de la Transición</th>
+            <th class="py-2.5 px-3">Timestamp</th>
+          </tr>
+        </thead>
+        <tbody id="tblCircuitBody">
+          <tr><td colspan="5" class="py-4 text-center text-slate-500">Sin transiciones registradas en circuit_log</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer class="text-center text-xs text-slate-500 font-mono py-2">
+    Sistemas Distribuidos &mdash; Guías APE 15 &amp; 16 &mdash; Java Spring Boot &amp; Flask
+  </footer>
+
+  <script>
+    function updateClock() {
+      document.getElementById('clockDisplay').textContent = new Date().toLocaleTimeString();
+    }
+
+    function renderCircuitState(st) {
+      const dot = document.getElementById('cbDot');
+      const lbl = document.getElementById('cbStateLabel');
+      lbl.textContent = st || 'UNKNOWN';
+
+      if (st === 'CLOSED') {
+        dot.className = 'status-dot dot-closed';
+        lbl.className = 'text-sm font-bold font-mono text-accent';
+      } else if (st === 'OPEN') {
+        dot.className = 'status-dot dot-open';
+        lbl.className = 'text-sm font-bold font-mono text-danger';
+      } else if (st === 'HALF_OPEN') {
+        dot.className = 'status-dot dot-half';
+        lbl.className = 'text-sm font-bold font-mono text-warn';
+      } else {
+        dot.className = 'status-dot bg-slate-500';
+        lbl.className = 'text-sm font-bold font-mono text-slate-400';
+      }
+    }
+
+    async function fetchCircuitStatus() {
+      try {
+        const res = await fetch('/api/circuit-status');
+        const data = await res.json();
+        renderCircuitState(data.estado || data.circuitState);
+      } catch (e) {
+        console.error("Error al consultar circuito:", e);
+      }
+    }
+
+    async function fetchNodosDb() {
+      try {
+        const res = await fetch('/api/nodos-db');
+        const list = await res.json();
+        const tbody = document.getElementById('tblNodosBody');
+        
+        if (!list || !list.length) {
+          tbody.innerHTML = '<tr><td colspan="6" class="py-4 text-center text-slate-500">Sin registros en la tabla estado_nodos</td></tr>';
+          return;
+        }
+
+        let html = '';
+        list.forEach(n => {
+          const isAct = n.estado === 'ACTIVO';
+          const badge = isAct ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold badge-closed">ACTIVO</span>'
+                            : '<span class="px-2 py-0.5 rounded text-[10px] font-bold badge-open">INACTIVO</span>';
+          html += `<tr class="border-b border-white/5 hover:bg-white/[0.02]">
+            <td class="py-2.5 px-3 text-slate-500">${n.id}</td>
+            <td class="py-2.5 px-3 font-semibold text-slate-200">${n.nodo}</td>
+            <td class="py-2.5 px-3 text-slate-400">${n.puerto}</td>
+            <td class="py-2.5 px-3">${badge}</td>
+            <td class="py-2.5 px-3 text-slate-400">${isAct ? n.latencia + ' ms' : '--'}</td>
+            <td class="py-2.5 px-3 text-slate-400 text-[11px]">${n.ultima_actualizacion}</td>
+          </tr>`;
+        });
+        tbody.innerHTML = html;
+      } catch (e) {
+        console.error("Error al consultar nodos:", e);
+      }
+    }
+
+    async function fetchCircuitDb() {
+      try {
+        const res = await fetch('/api/circuit-db');
+        const list = await res.json();
+        const tbody = document.getElementById('tblCircuitBody');
+
+        if (!list || !list.length) {
+          tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-slate-500">Sin transiciones registradas en circuit_log</td></tr>';
+          return;
+        }
+
+        let html = '';
+        list.forEach(c => {
+          const bOld = stateBadgeHtml(c.estado_anterior);
+          const bNew = stateBadgeHtml(c.nuevo_estado);
+          html += `<tr class="border-b border-white/5 hover:bg-white/[0.02]">
+            <td class="py-2.5 px-3 text-slate-500">${c.id}</td>
+            <td class="py-2.5 px-3 font-semibold text-slate-200">${c.servicio}</td>
+            <td class="py-2.5 px-3">${bOld} &rarr; ${bNew}</td>
+            <td class="py-2.5 px-3 text-slate-400">${c.motivo || ''}</td>
+            <td class="py-2.5 px-3 text-slate-400 text-[11px]">${c.timestamp}</td>
+          </tr>`;
+        });
+        tbody.innerHTML = html;
+      } catch (e) {
+        console.error("Error al consultar circuit logs:", e);
+      }
+    }
+
+    function stateBadgeHtml(st) {
+      if (st === 'CLOSED') return '<span class="px-2 py-0.5 rounded text-[10px] font-bold badge-closed">CLOSED</span>';
+      if (st === 'OPEN') return '<span class="px-2 py-0.5 rounded text-[10px] font-bold badge-open">OPEN</span>';
+      if (st === 'HALF_OPEN') return '<span class="px-2 py-0.5 rounded text-[10px] font-bold badge-half">HALF_OPEN</span>';
+      return `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-white/10 text-slate-400">${st}</span>`;
+    }
+
+    async function sendSingleRequest() {
+      const out = document.getElementById('jsonOutput');
+      const badge = document.getElementById('respBadge');
+      out.innerHTML = '<span class="text-accent2">Enviando petición HTTP al Orquestador...</span>';
+      badge.className = 'text-xs font-mono px-2.5 py-1 rounded bg-accent2/20 text-accent2';
+      badge.textContent = 'Enviando...';
+
+      try {
+        const res = await fetch('/api/orquestar', { method: 'POST' });
+        const json = await res.json();
+        
+        badge.className = `text-xs font-mono px-2.5 py-1 rounded ${json.http_code === 200 ? 'bg-accent/20 text-accent' : 'bg-danger/20 text-danger'}`;
+        badge.textContent = `HTTP ${json.http_code} (${json.elapsed_ms}ms)`;
+
+        out.textContent = JSON.stringify(json, null, 2);
+        
+        // Refrescar tablas
+        fetchCircuitStatus();
+        fetchNodosDb();
+        fetchCircuitDb();
+      } catch (e) {
+        badge.className = 'text-xs font-mono px-2.5 py-1 rounded bg-danger/20 text-danger';
+        badge.textContent = 'Error Conexión';
+        out.textContent = `Error: ${e.message}`;
+      }
+    }
+
+    async function sendBurstRequests(count) {
+      for (let i = 0; i < count; i++) {
+        await sendSingleRequest();
+        await new Promise(r => setTimeout(r, 200));
+      }
+    }
+
+    function refreshAll() {
+      updateClock();
+      fetchCircuitStatus();
+      fetchNodosDb();
+      fetchCircuitDb();
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      refreshAll();
+      setInterval(updateClock, 1000);
+      setInterval(refreshAll, 2000);
+    });
+  </script>
+</body>
+</html>

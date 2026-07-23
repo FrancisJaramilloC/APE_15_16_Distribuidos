@@ -1,0 +1,37 @@
+# Build de Maven / Java / Spring Boot
+target/
+*.class
+*.jar
+*.war
+*.ear
+
+# Base de datos SQLite local generada en runtime
+*.db
+*.db-journal
+*.sqlite3
+nodos.db
+
+# Logs y bases de datos temporales
+*.log
+*.sqlite
+
+# IDEs y Editores de código (Eclipse, IntelliJ, VSCode)
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.classpath
+.project
+.settings/
+*.factorypath
+
+# Entorno Virtual Python
+venv/
+.venv/
+__pycache__/
+
+# Archivos de entorno y secretos
+.env
+.env.local
