@@ -25,7 +25,7 @@ public class PagosController {
         return ResponseEntity.ok(response);
     }
 
-    @GetMapping({"/", "/procesar-pago", "/api/pagos/procesar"})
+    @GetMapping({"/", "/procesar", "/procesar-pago", "/api/pagos/procesar"})
     public ResponseEntity<Map<String, Object>> procesarPago() {
         Map<String, Object> response = new HashMap<>();
         response.put("status", "OK");

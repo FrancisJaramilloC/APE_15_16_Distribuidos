@@ -25,7 +25,7 @@ public class UsuariosController {
         return ResponseEntity.ok(response);
     }
 
-    @GetMapping({"/", "/verificar-usuario", "/api/usuarios/verificar"})
+    @GetMapping({"/", "/procesar", "/verificar-usuario", "/api/usuarios/verificar"})
     public ResponseEntity<Map<String, Object>> verificarUsuario() {
         Map<String, Object> response = new HashMap<>();
         response.put("status", "OK");

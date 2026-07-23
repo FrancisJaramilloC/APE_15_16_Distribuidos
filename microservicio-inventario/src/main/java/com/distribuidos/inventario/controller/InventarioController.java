@@ -25,7 +25,7 @@ public class InventarioController {
         return ResponseEntity.ok(response);
     }
 
-    @GetMapping({"/", "/consultar-stock", "/api/inventario/consultar"})
+    @GetMapping({"/", "/procesar", "/consultar-stock", "/api/inventario/consultar"})
     public ResponseEntity<Map<String, Object>> consultarInventario() {
         Map<String, Object> response = new HashMap<>();
         response.put("status", "OK");

@@ -18,7 +18,15 @@ import java.util.Map;
 @Component
 public class DatabaseManager {
 
-    private static final String DB_PATH = new File("nodos.db").getAbsolutePath();
+    private static String resolveDbPath() {
+        File parentDb = new File("../nodos.db");
+        if (new File("../frontend").exists() || new File("../microservicio-orquestador").exists()) {
+            return parentDb.getAbsolutePath();
+        }
+        return new File("nodos.db").getAbsolutePath();
+    }
+
+    private static final String DB_PATH = resolveDbPath();
     private static final String URL = "jdbc:sqlite:" + DB_PATH;
 
     public DatabaseManager() {
