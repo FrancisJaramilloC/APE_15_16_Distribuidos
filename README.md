@@ -1,63 +1,88 @@
 # Guía de Actividades Práctico-Experimentales (APE 15 y 16)
-## Arquitectura de Microservicios Distribuidos en Java (Spring Boot): Balanceador de Carga con Heartbeat Failover, Patrón Circuit Breaker y Persistencia en SQLite (`nodos.db`)
+## Arquitectura de Microservicios Distribuidos en Java (Spring Boot) & Dashboard Interactivo en Flask: Balanceador de Carga con Heartbeat Failover, Patrón Circuit Breaker y Persistencia en SQLite (`nodos.db`)
 
-Este repositorio contiene la solución integral para las prácticas **APE Nro. 15 y 16** de la asignatura de **Sistemas Distribuidos**. El proyecto implementa una arquitectura distribuida modular en **Java Spring Boot 3 / Java 21** que combina monitorización física en segundo plano (**Heartbeat Failover**), protección lógica de red (**Patrón Circuit Breaker**) y auditoría persistente en una base de datos local **SQLite (`nodos.db`)**.
+Este repositorio contiene la solución integral para las prácticas **APE Nro. 15 y 16** de la asignatura de **Sistemas Distribuidos**. El proyecto implementa una arquitectura distribuida modular en **Java Spring Boot 3 / Java 21** para los microservicios de negocio y una **interfaz web interactiva en Flask** para visualizar la ejecución en tiempo real, la monitorización física (**Heartbeat Failover**), la protección lógica (**Circuit Breaker**) y las tablas de auditoría en **SQLite (`nodos.db`)**.
 
 ---
 
-## 📐 Arquitectura de Microservicios Spring Boot
+## 📐 Arquitectura General del Sistema
 
 ```mermaid
-graph TD
-    Client["📱 Cliente HTTP / cURL / Navegador"] -->|"GET /pago"| Orch["⚡ Microservicio Orquestador (Spring Boot :8080 / :5001)"]
-    Orch -->|"Protegido por"| CB["🛡️ Circuit Breaker (CLOSED / OPEN / HALF-OPEN)"]
-    
-    CB -->|"Si CLOSED / HALF-OPEN"| LB["⚖️ Microservicio Balanceador (Spring Boot :8000 / :5000)"]
-    CB -->|"Si OPEN (menor a 0.01s)"| FB["⚠️ Respuesta Fallback Inmediata"]
-    
-    LB -->|"Round-Robin / Least-Connections"| Cluster["Cluster de 4 Microservicios Backend (Spring Boot)"]
-    Cluster --> B1["💳 Microservicio Pagos (:9001 - Integrante 1)"]
-    Cluster --> B2["📦 Microservicio Inventario (:9002 - Integrante 2)"]
-    Cluster --> B3["👤 Microservicio Usuarios (:9003 - Integrante 3)"]
-    Cluster --> B4["🔔 Microservicio Notificaciones (:9004 - Integrante 4)"]
-    
-    HB["❤️ Heartbeat Scheduler (Cada 2s)"] -->|"GET /health"| B1
-    HB -->|"GET /health"| B2
-    HB -->|"GET /health"| B3
-    HB -->|"GET /health"| B4
-    HB -->|"Actualiza estado_nodos"| DB[("🗄️ SQLite nodos.db")]
-    CB -->|"Registra circuit_log"| DB
+flowchart TD
+    subgraph CapaCliente ["📱 Capa de Cliente / Dashboard Web"]
+        WebUI["🖥️ Dashboard Interactivo Flask (:5000)"]
+        Req["Petición HTTP GET /pago"]
+    end
+
+    subgraph CapaOrquestacion ["⚡ Microservicio Orquestador (Spring Boot :8080 / :5001)"]
+        CB["🛡️ Circuit Breaker<br/>(CLOSED / OPEN / HALF-OPEN)"]
+        FB["⚠️ Respuesta Fallback<br/>(Respuesta Inmediata)"]
+    end
+
+    subgraph CapaBalanceo ["⚖️ Microservicio Balanceador (Spring Boot :8000 / :5000)"]
+        LB["Proxy Balanceador de Carga"]
+        HB["❤️ Heartbeat Scheduler<br/>(Sondeo /health cada 2s)"]
+    end
+
+    subgraph CapaCluster ["📦 Cluster de Microservicios Backend (Spring Boot)"]
+        B1["💳 Pagos (:9001)<br/>(Integrante 1)"]
+        B2["📦 Inventario (:9002)<br/>(Integrante 2)"]
+        B3["👤 Usuarios (:9003)<br/>(Integrante 3)"]
+        B4["🔔 Notificaciones (:9004)<br/>(Integrante 4)"]
+    end
+
+    subgraph CapaPersistencia ["🗄️ Persistencia SQLite (nodos.db)"]
+        DB_Nodes[("Tabla: estado_nodos<br/>(Heartbeat Físico)")]
+        DB_Circuit[("Tabla: circuit_log<br/>(Auditoría Circuito)")]
+    end
+
+    %% Flujo Principal de Solicitudes
+    WebUI --> Req
+    Req --> CB
+    CB -->|"Si CLOSED / HALF-OPEN"| LB
+    CB -->|"Si OPEN (Respuesta Fallback)"| FB
+
+    LB -->|"Round-Robin"| B1
+    LB -->|"Round-Robin"| B2
+    LB -->|"Round-Robin"| B3
+    LB -->|"Round-Robin"| B4
+
+    %% Monitoreo en Segundo Plano y Persistencia
+    HB -.->|"Sondeo /health"| CapaCluster
+    HB -->|"Actualiza nodos"| DB_Nodes
+    CB -->|"Registra eventos"| DB_Circuit
 ```
 
 ---
 
-## 🧩 Microservicios del Proyecto (1 por Integrante + Infraestructura)
+## 🧩 Microservicios del Proyecto (1 por Integrante + Dashboard Web)
 
-1. **`microservicio-orquestador` (Spring Boot - Puerto 8080 / 5001)**:
-   - Actúa como API Gateway / Cliente principal.
+1. **`frontend/` (Dashboard Web en Flask - Puerto 5000)**:
+   - Interfaz gráfica interactiva y limpia para demostración en vivo.
+   - Permite enviar peticiones al Orquestador (`GET /pago`) o lanzar ráfagas de 10 peticiones.
+   - Muestra en tiempo real la tabla `estado_nodos` (Heartbeat) y la tabla `circuit_log` (Circuit Breaker).
+
+2. **`microservicio-orquestador` (Spring Boot - Puerto 8080 / 5001)**:
+   - API Gateway principal.
    - Implementa el patrón **Circuit Breaker** (clase `CircuitBreaker.java`) con estados `CLOSED`, `OPEN`, `HALF_OPEN`.
    - Persiste cada cambio de estado del circuito en la tabla `circuit_log` de SQLite (`nodos.db`).
 
-2. **`microservicio-balanceador` (Spring Boot - Puerto 8000 / 5000)**:
-   - Microservicio Proxy que distribuye el tráfico entre las 4 instancias backend activas.
+3. **`microservicio-balanceador` (Spring Boot - Puerto 8000 / 5000)**:
+   - Microservicio Proxy que distribuye el tráfico entre los microservicios backend del cluster.
    - Contiene el `HeartbeatScheduler` que sondea `/health` en los nodos cada 2s (timeout 1.5s).
    - Persiste el estado físico de los nodos (`ACTIVO` / `INACTIVO`) en la tabla `estado_nodos` de SQLite (`nodos.db`).
 
-3. **`microservicio-pagos` (Spring Boot - Puerto 9001 - Integrante 1)**:
-   - Microservicio Backend de Procesamiento de Pagos.
-   - Expone `/health` y `/api/pagos/procesar`.
+4. **`microservicio-pagos` (Spring Boot - Puerto 9001 - Integrante 1)**:
+   - Microservicio Backend de Procesamiento de Pagos (`/health`, `/api/pagos/procesar`).
 
-4. **`microservicio-inventario` (Spring Boot - Puerto 9002 - Integrante 2)**:
-   - Microservicio Backend de Gestión de Inventario.
-   - Expone `/health` y `/api/inventario/consultar`.
+5. **`microservicio-inventario` (Spring Boot - Puerto 9002 - Integrante 2)**:
+   - Microservicio Backend de Gestión de Inventario (`/health`, `/api/inventario/consultar`).
 
-5. **`microservicio-usuarios` (Spring Boot - Puerto 9003 - Integrante 3)**:
-   - Microservicio Backend de Autenticación y Usuarios.
-   - Expone `/health` y `/api/usuarios/verificar`.
+6. **`microservicio-usuarios` (Spring Boot - Puerto 9003 - Integrante 3)**:
+   - Microservicio Backend de Autenticación y Usuarios (`/health`, `/api/usuarios/verificar`).
 
-6. **`microservicio-notificaciones` (Spring Boot - Puerto 9004 - Integrante 4)**:
-   - Microservicio Backend de Envíos y Notificaciones.
-   - Expone `/health` y `/api/notificaciones/enviar`.
+7. **`microservicio-notificaciones` (Spring Boot - Puerto 9004 - Integrante 4)**:
+   - Microservicio Backend de Envíos y Notificaciones (`/health`, `/api/notificaciones/enviar`).
 
 ---
 
@@ -82,6 +107,13 @@ Para realizar la presentación en el laboratorio utilizando múltiples computado
      ```bash
      BALANCER_URL="http://192.168.1.20:8000" cd microservicio-orquestador && mvn spring-boot:run
      ```
+
+4. **En la PC del Cliente / Presentación (Dashboard Web Flask)**:
+   - Inicia la interfaz gráfica:
+     ```bash
+     ORCHESTRATOR_URL="http://192.168.1.10:8080" python3 frontend/app.py
+     ```
+   - Abre en el navegador: 👉 **`http://localhost:5000`**
 
 ---
 
