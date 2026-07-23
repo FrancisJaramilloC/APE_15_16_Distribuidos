@@ -27,7 +27,7 @@ public class DatabaseManager {
     }
 
     private static final String DB_PATH = resolveDbPath();
-    private static final String URL = "jdbc:sqlite:" + DB_PATH;
+    private static final String URL = "jdbc:sqlite:" + DB_PATH + "?busy_timeout=5000";
 
     public DatabaseManager() {
         initDb();
@@ -36,6 +36,9 @@ public class DatabaseManager {
     public synchronized void initDb() {
         try (Connection conn = DriverManager.getConnection(URL);
              Statement stmt = conn.createStatement()) {
+            
+            stmt.execute("PRAGMA journal_mode=WAL;");
+            stmt.execute("PRAGMA busy_timeout=5000;");
             
             stmt.execute("""
                 CREATE TABLE IF NOT EXISTS estado_nodos (

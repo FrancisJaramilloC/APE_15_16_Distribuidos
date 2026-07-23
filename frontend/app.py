@@ -15,7 +15,9 @@ def query_sqlite(query, params=()):
     if not os.path.exists(DB_PATH):
         return []
     try:
-        conn = sqlite3.connect(DB_PATH, timeout=5)
+        conn = sqlite3.connect(DB_PATH, timeout=10)
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA busy_timeout=5000;")
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute(query, params)
@@ -77,13 +79,31 @@ def get_circuit_status():
 
 @app.route('/api/nodos-db')
 def get_nodos_db():
-    """Consulta la tabla estado_nodos de SQLite (Heartbeat Físico)."""
+    """Consulta los nodos sondeados del Balanceador (vía HTTP REST o SQLite)."""
+    try:
+        resp = requests.get(f"{BALANCEADOR_URL}/api/db/nodos", timeout=2)
+        if resp.status_code == 200:
+            return jsonify(resp.json())
+    except Exception:
+        pass
     rows = query_sqlite("SELECT * FROM estado_nodos ORDER BY puerto ASC;")
     return jsonify(rows)
 
 @app.route('/api/circuit-db')
 def get_circuit_db():
-    """Consulta la tabla circuit_log de SQLite (Transiciones Circuit Breaker)."""
+    """Consulta la auditoría del Circuit Breaker (vía HTTP REST u Orquestador/SQLite)."""
+    try:
+        resp = requests.get(f"{ORCHESTRATOR_URL}/api/circuit/logs", timeout=2)
+        if resp.status_code == 200:
+            return jsonify(resp.json())
+    except Exception:
+        pass
+    try:
+        resp = requests.get(f"{BALANCEADOR_URL}/api/db/circuit", timeout=2)
+        if resp.status_code == 200:
+            return jsonify(resp.json())
+    except Exception:
+        pass
     rows = query_sqlite("SELECT * FROM circuit_log ORDER BY id DESC LIMIT 50;")
     return jsonify(rows)
 
