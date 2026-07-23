@@ -1,10 +1,15 @@
 package com.distribuidos.balanceador.model;
 
+/**
+ * Modelo de Datos que representa un Nodo Backend dentro del Cluster.
+ * Mantiene la dirección IP, puerto, estado de salud ("healthy" / "down") y latencia.
+ */
 public class BackendNode {
+
     private String host;
     private int port;
-    private String status; // "healthy", "down"
-    private double latency;
+    private String status;  // Estado físico: "healthy" o "down"
+    private double latency; // Latencia medida en milisegundos
 
     public BackendNode(String host, int port) {
         this.host = host;
@@ -45,6 +50,9 @@ public class BackendNode {
         this.latency = latency;
     }
 
+    /**
+     * Verifica si el nodo está completamente sano y activo para recibir peticiones.
+     */
     public boolean isHealthy() {
         return "healthy".equalsIgnoreCase(status);
     }

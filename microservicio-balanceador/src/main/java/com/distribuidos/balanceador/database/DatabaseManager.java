@@ -14,11 +14,18 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import com.distribuidos.balanceador.model.BackendNode;
 
+/**
+ * Gestor de Persistencia para SQLite (nodos.db).
+ * Administra las conexiones JDBC y las operaciones CRUD para la tabla estado_nodos.
+ */
 @Component
 public class DatabaseManager {
 
+    /**
+     * Resuelve dinámicamente la ruta del archivo nodos.db para que los microservicios
+     * y el Frontend compartan exactamente el mismo archivo en la raíz del proyecto.
+     */
     private static String resolveDbPath() {
         File parentDb = new File("../nodos.db");
         if (new File("../frontend").exists() || new File("../microservicio-balanceador").exists()) {
@@ -28,19 +35,21 @@ public class DatabaseManager {
     }
 
     private static final String DB_PATH = resolveDbPath();
-    private static final String URL = "jdbc:sqlite:" + DB_PATH + "?busy_timeout=5000";
+    private static final String URL = "jdbc:sqlite:" + DB_PATH;
 
     public DatabaseManager() {
         initDb();
     }
 
+    /**
+     * Inicializa la estructura DDL de la base de datos de forma automática.
+     * Crea las tablas estado_nodos y circuit_log si no existen previamente.
+     */
     public synchronized void initDb() {
         try (Connection conn = DriverManager.getConnection(URL);
              Statement stmt = conn.createStatement()) {
             
-            stmt.execute("PRAGMA journal_mode=WAL;");
-            stmt.execute("PRAGMA busy_timeout=5000;");
-            
+            // Tabla para monitoreo físico del Heartbeat
             stmt.execute("""
                 CREATE TABLE IF NOT EXISTS estado_nodos (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -52,9 +61,7 @@ public class DatabaseManager {
                 );
             """);
 
-            // Limpiar registros antiguos de pruebas previas al arrancar
-            stmt.execute("DELETE FROM estado_nodos;");
-
+            // Tabla para auditoría de transiciones del Circuit Breaker
             stmt.execute("""
                 CREATE TABLE IF NOT EXISTS circuit_log (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,21 +78,9 @@ public class DatabaseManager {
         }
     }
 
-    public synchronized void syncNodes(List<BackendNode> activeNodes) {
-        if (activeNodes == null || activeNodes.isEmpty()) return;
-        try (Connection conn = DriverManager.getConnection(URL);
-             Statement stmt = conn.createStatement()) {
-            StringBuilder inClause = new StringBuilder();
-            for (int i = 0; i < activeNodes.size(); i++) {
-                if (i > 0) inClause.append(",");
-                inClause.append("'").append(activeNodes.get(i).getAddress()).append("'");
-            }
-            stmt.executeUpdate("DELETE FROM estado_nodos WHERE nodo NOT IN (" + inClause.toString() + ");");
-        } catch (Exception e) {
-            System.err.println("[SQLite Sync Nodes Error] " + e.getMessage());
-        }
-    }
-
+    /**
+     * Inserta o actualiza el estado de un nodo backend en la tabla estado_nodos.
+     */
     public synchronized void updateNodeStatus(String nodo, int puerto, String estado, double latencia) {
         String nowStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
         String sql = """
@@ -113,6 +108,9 @@ public class DatabaseManager {
         }
     }
 
+    /**
+     * Obtiene la lista de todos los nodos registrados en la tabla estado_nodos.
+     */
     public synchronized List<Map<String, Object>> getAllNodes() {
         List<Map<String, Object>> list = new ArrayList<>();
         String sql = "SELECT * FROM estado_nodos ORDER BY puerto ASC;";
@@ -139,6 +137,9 @@ public class DatabaseManager {
         return list;
     }
 
+    /**
+     * Obtiene el historial de registros de transiciones de la tabla circuit_log.
+     */
     public synchronized List<Map<String, Object>> getCircuitLogs() {
         List<Map<String, Object>> list = new ArrayList<>();
         String sql = "SELECT * FROM circuit_log ORDER BY id DESC LIMIT 50;";

@@ -15,9 +15,17 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Gestor de Persistencia SQLite para el Orquestador.
+ * Registra la auditoría de transiciones del Circuit Breaker en la tabla circuit_log.
+ */
 @Component
 public class DatabaseManager {
 
+    /**
+     * Resuelve dinámicamente la ruta del archivo nodos.db para compartir
+     * el mismo archivo SQLite en la raíz del proyecto.
+     */
     private static String resolveDbPath() {
         File parentDb = new File("../nodos.db");
         if (new File("../frontend").exists() || new File("../microservicio-orquestador").exists()) {
@@ -27,18 +35,18 @@ public class DatabaseManager {
     }
 
     private static final String DB_PATH = resolveDbPath();
-    private static final String URL = "jdbc:sqlite:" + DB_PATH + "?busy_timeout=5000";
+    private static final String URL = "jdbc:sqlite:" + DB_PATH;
 
     public DatabaseManager() {
         initDb();
     }
 
+    /**
+     * Inicializa la tabla circuit_log si no existe previamente.
+     */
     public synchronized void initDb() {
         try (Connection conn = DriverManager.getConnection(URL);
              Statement stmt = conn.createStatement()) {
-            
-            stmt.execute("PRAGMA journal_mode=WAL;");
-            stmt.execute("PRAGMA busy_timeout=5000;");
             
             stmt.execute("""
                 CREATE TABLE IF NOT EXISTS circuit_log (
@@ -56,6 +64,14 @@ public class DatabaseManager {
         }
     }
 
+    /**
+     * Inserta una nueva transición de estado en la tabla circuit_log.
+     * 
+     * @param servicio Nombre del servicio ("ServicioOrquestador").
+     * @param estadoAnterior Estado previo (CLOSED, OPEN, HALF_OPEN).
+     * @param nuevoEstado Nuevo estado al que commuta el circuito.
+     * @param motivo Explicación técnica de la causa de la transición.
+     */
     public synchronized void logCircuitTransition(String servicio, String estadoAnterior, String nuevoEstado, String motivo) {
         String nowStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
         String sql = """
@@ -78,6 +94,9 @@ public class DatabaseManager {
         }
     }
 
+    /**
+     * Consulta las últimas 50 transiciones registradas en la tabla circuit_log.
+     */
     public synchronized List<Map<String, Object>> getCircuitLogs() {
         List<Map<String, Object>> list = new ArrayList<>();
         String sql = "SELECT * FROM circuit_log ORDER BY id DESC LIMIT 50;";

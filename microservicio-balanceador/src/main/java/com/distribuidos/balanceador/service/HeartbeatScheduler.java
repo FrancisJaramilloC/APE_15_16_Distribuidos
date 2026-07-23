@@ -10,6 +10,11 @@ import org.springframework.web.client.RestTemplate;
 import java.net.URI;
 import java.util.List;
 
+/**
+ * Componente Encargado del Monitoreo Proactivo de Salud (Heartbeat).
+ * Ejecuta un hilo secundario periódico que sondea el estado físico de los nodos
+ * y actualiza los resultados en la base de datos SQLite (nodos.db).
+ */
 @Service
 public class HeartbeatScheduler {
 
@@ -21,28 +26,34 @@ public class HeartbeatScheduler {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-    @Scheduled(fixedRate = 2000) // Sondeo cada 2 segundos para detección < 3s (Guía 15/16)
+    /**
+     * Tarea Periódica ejecutada cada 2000 ms (2 segundos).
+     * Satisface el requisito de detección de fallas físicas en menos de 3 segundos (Guía 15).
+     */
+    @Scheduled(fixedRate = 2000)
     public void performHeartbeat() {
         List<BackendNode> nodes = loadBalancerService.getAllNodes();
-        databaseManager.syncNodes(nodes);
 
         for (BackendNode node : nodes) {
             long start = System.currentTimeMillis();
             try {
-                // Timeout rápido de 1.5s
+                // Realiza la petición HTTP GET /health hacia el microservicio backend
                 String url = node.getUrl() + "/health";
                 String response = restTemplate.getForObject(new URI(url), String.class);
                 long elapsed = System.currentTimeMillis() - start;
 
                 if (response != null && response.contains("status")) {
+                    // El nodo respondió correctamente: Marcar como sano (healthy) y ACTIVO
                     node.setStatus("healthy");
                     node.setLatency((double) elapsed);
                     databaseManager.updateNodeStatus(node.getAddress(), node.getPort(), "ACTIVO", (double) elapsed);
                 } else {
+                    // Respuesta inválida: Marcar como caído (down) e INACTIVO
                     node.setStatus("down");
                     databaseManager.updateNodeStatus(node.getAddress(), node.getPort(), "INACTIVO", 0.0);
                 }
             } catch (Exception e) {
+                // Excepción de conexión o timeout: El nodo se encuentra apagado o inaccesible
                 node.setStatus("down");
                 node.setLatency(0.0);
                 databaseManager.updateNodeStatus(node.getAddress(), node.getPort(), "INACTIVO", 0.0);

@@ -8,36 +8,53 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 
+/**
+ * Implementación del Patrón de Tolerancia a Fallos Circuit Breaker.
+ * Funciona como una Máquina de Estados Finitos con 3 estados:
+ * 
+ * - CLOSED (Cerrado): El sistema opera normalmente. Las solicitudes fluyen hacia la red.
+ * - OPEN (Abierto): Se detectaron 3 fallos consecutivos. Corta la comunicación de red y devuelve respuestas Fallback inmediatas.
+ * - HALF_OPEN (Semi-Abierto): Transcurridos 10 segundos de cooldown, prueba una solicitud para evaluar la recuperación autónoma del cluster.
+ */
 @Component
 public class CircuitBreaker {
 
     private final String serviceName = "ServicioOrquestador";
-    private final int failureThreshold = 3;        // Umbral de 3 fallos consecutivos
-    private final long recoveryTimeoutMs = 10000; // 10 segundos de cooldown
+    private final int failureThreshold = 3;        // Umbral de 3 fallos consecutivos para abrir el circuito
+    private final long recoveryTimeoutMs = 10000; // 10 segundos de enfriamiento (cooldown)
 
-    private String state = "CLOSED"; // CLOSED, OPEN, HALF_OPEN
-    private int failureCount = 0;
-    private int successCount = 0;
-    private long lastStateChange = System.currentTimeMillis();
+    private String state = "CLOSED"; // Estado inicial del circuito
+    private int failureCount = 0;    // Contador acumulado de fallos consecutivos
+    private int successCount = 0;    // Contador acumulado de éxitos
+    private long lastStateChange = System.currentTimeMillis(); // Timestamp del último cambio de estado
 
     @Autowired
     private DatabaseManager databaseManager;
 
+    /**
+     * Realiza la transición de estado de forma thread-safe y registra el evento en SQLite (circuit_log).
+     */
     private synchronized void transitionTo(String newState, String reason) {
         String oldState = this.state;
         if (!oldState.equals(newState)) {
             this.state = newState;
             this.lastStateChange = System.currentTimeMillis();
+            
             if ("CLOSED".equals(newState)) {
                 this.failureCount = 0;
             }
 
+            // Persiste el cambio de estado en la tabla circuit_log de SQLite
             if (databaseManager != null) {
                 databaseManager.logCircuitTransition(serviceName, oldState, newState, reason);
             }
         }
     }
 
+    /**
+     * Evalúa si una solicitud puede ejecutarse o si debe bloquearse.
+     * Si el circuito está OPEN y han pasado más de 10s, conmuta automáticamente a HALF_OPEN.
+     */
     public synchronized boolean canExecute() {
         if ("OPEN".equals(state)) {
             long elapsed = System.currentTimeMillis() - lastStateChange;
@@ -50,6 +67,10 @@ public class CircuitBreaker {
         return true;
     }
 
+    /**
+     * Registra una respuesta exitosa.
+     * Si el circuito estaba en HALF_OPEN, se restablece a CLOSED.
+     */
     public synchronized void recordSuccess() {
         this.successCount++;
         if ("HALF_OPEN".equals(state)) {
@@ -59,6 +80,10 @@ public class CircuitBreaker {
         }
     }
 
+    /**
+     * Registra una falla o timeout en la llamada.
+     * Si se alcanza el umbral de 3 fallos en CLOSED, abre el circuito a OPEN.
+     */
     public synchronized void recordFailure(String errorMsg) {
         this.failureCount++;
         if ("HALF_OPEN".equals(state)) {
@@ -68,6 +93,10 @@ public class CircuitBreaker {
         }
     }
 
+    /**
+     * Encapsula la ejecución de una función de red dentro del Circuit Breaker.
+     * Lanza CircuitBreakerOpenException si el circuito se encuentra ABIERTO.
+     */
     public <T> T execute(Supplier<T> supplier) {
         if (!canExecute()) {
             throw new CircuitBreakerOpenException("Circuito ABIERTO (OPEN). Petición bloqueada para evitar fallos en cascada.");
@@ -87,6 +116,9 @@ public class CircuitBreaker {
         return state;
     }
 
+    /**
+     * Retorna el mapa de estado actual con el tiempo restante de cooldown en segundos.
+     */
     public synchronized Map<String, Object> getStatus() {
         Map<String, Object> status = new HashMap<>();
         long elapsed = System.currentTimeMillis() - lastStateChange;
@@ -98,6 +130,7 @@ public class CircuitBreaker {
         status.put("umbralFallos", failureThreshold);
         status.put("cooldownSegundos", recoveryTimeoutMs / 1000);
         status.put("tiempoRestanteCooldownSegundos", timeRemaining);
+        
         return status;
     }
 }
